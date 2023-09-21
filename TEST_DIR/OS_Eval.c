@@ -25,6 +25,7 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <math.h>
 
 int counter=3;
 bool  isFirstIteration = false;
@@ -99,6 +100,25 @@ struct timespec *calc_diff(struct timespec *smaller, struct timespec *bigger)
 
 struct timespec *timeB;
 struct timespec *timeD;
+
+struct timespec* calc_std(struct timespec *array, struct timespec *avg, int size)
+{
+	struct timespec *sd = (struct timespec *)malloc(sizeof(struct timespec));
+	sd->tv_sec = 0;
+	sd->tv_nsec = 0;
+	if (size == 0) return sd;
+
+        int i = 0;
+	long long avg_ns = avg->tv_sec * 1000000000 + avg->tv_nsec;
+        for (i = 0; i < size; i++) {
+	  sd->tv_nsec += pow((array[i].tv_nsec + array[i].tv_sec * 1000000000) - avg_ns, 2);
+	}
+	sd->tv_nsec = sqrt(sd->tv_nsec / size);
+
+	sd->tv_nsec = sd->tv_nsec % 1000000000;
+	sd->tv_sec = sd->tv_nsec / 1000000000;
+	return sd;
+}
 
 struct timespec* calc_average(struct timespec *sum, int size)
 {
@@ -246,6 +266,10 @@ void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *
 	}
 	struct timespec *sum = calc_sum2(timeArray, runs);
 	struct timespec *average = calc_average(sum, runs);  
+	struct timespec *std = calc_std(timeArray, average, runs);
+	//for (int i=0; i < runs; i++) {
+	//	fprintf(fp, "%ld.%09ld %ld\n", timeArray[i].tv_sec, timeArray[i].tv_nsec, timeArray[i].tv_sec * 1000000000 + timeArray[i].tv_nsec);
+	//}
 	struct timespec *kbest = calc_k_closest(timeArray, runs);	
 
 	if (!isFirstIteration)
@@ -276,10 +300,11 @@ void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *
 		fprintf(fp, "%10s", info->name);
 		fprintf(fp, "        average:,");
 	}
-	fprintf(fp,"%ld.%09ld,\n",average->tv_sec, average->tv_nsec); 
+	fprintf(fp,"%ld.%09ld,%ld.%09ld\n",average->tv_sec, average->tv_nsec, std->tv_sec, std->tv_nsec);
 
 	free(sum);
 	free(average);
+	free(std);
 	free(timeArray);
 
 
@@ -315,6 +340,7 @@ void one_line_test_v2(FILE *fp, FILE *copy, void (*f)(struct timespec*, int, int
 
 	struct timespec *sum = calc_sum2(timeArray, runs);
 	struct timespec *average = calc_average(sum, runs);  
+	struct timespec *std = calc_std(timeArray, average, runs);
 	struct timespec *kbest = calc_k_closest(timeArray, runs);	
 
 	if (!isFirstIteration)
@@ -345,10 +371,11 @@ void one_line_test_v2(FILE *fp, FILE *copy, void (*f)(struct timespec*, int, int
 		fprintf(fp, "%10s", info->name);
 		fprintf(fp, "        average:,");
 	}
-	fprintf(fp,"%ld.%09ld,\n",average->tv_sec, average->tv_nsec); 
+	fprintf(fp,"%ld.%09ld,%ld.%09ld\n",average->tv_sec, average->tv_nsec, std->tv_sec, std->tv_nsec);
 
 	free(sum);
 	free(average);
+	free(std);
 	free(timeArray);
 
 
@@ -381,10 +408,21 @@ void two_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*,struct times
 	struct timespec *sumParent = calc_sum2(timeArrayParent, runs);
 	struct timespec *sumChild = calc_sum2(timeArrayChild, runs);
 	struct timespec *averageParent = calc_average(sumParent, runs);
+	struct timespec *stdParent = calc_std(timeArrayParent, averageParent, runs);
+	//for (int i=0; i < runs; i++) {
+	//	fprintf(fp, "%ld.%09ld %ld\n", timeArrayParent[i].tv_sec, timeArrayParent[i].tv_nsec, timeArrayParent[i].tv_sec * 1000000000 + timeArrayParent[i].tv_nsec);
+	//}
 	struct timespec *averageChild = calc_average(sumChild, runs);
+	struct timespec *stdChild= calc_std(timeArrayChild, averageChild, runs);
+	//for (int i=0; i < runs; i++) {
+	//	fprintf(fp, "%ld.%09ld %ld\n", timeArrayChild[i].tv_sec, timeArrayChild[i].tv_nsec, timeArrayChild[i].tv_sec * 1000000000 + timeArrayChild[i].tv_nsec);
+	//}
 	struct timespec **averages = (struct timespec **) malloc(2*sizeof(struct timespec *));
 	averages[0] = averageParent;
 	averages[1] = averageChild;
+	struct timespec **stds = (struct timespec **) malloc(2*sizeof(struct timespec *));
+	stds[0] = stdParent;
+	stds[1] = stdChild;
 
 	struct timespec *kbestParent = calc_k_closest(timeArrayParent, runs);
 	struct timespec *kbestChild = calc_k_closest(timeArrayChild, runs);
@@ -413,29 +451,32 @@ void two_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*,struct times
 					break;
 				fputc(ch,fp);
 			}
-			fprintf(fp,"%ld.%09ld,\n",averages[i]->tv_sec,averages[i]->tv_nsec); 
+			fprintf(fp,"%ld.%09ld,%ld.%09ld,\n",averages[i]->tv_sec,averages[i]->tv_nsec,stds[i]->tv_sec, stds[i]->tv_nsec);
 		}
 	}
 	else
 	{
 		fprintf(fp, "%10s", info->name);
-		fprintf(fp,"          kbest:,%ld.%09ld,\n",kbests[0]->tv_sec, kbests[0]->tv_nsec); 
+		fprintf(fp,"          kbest:,%ld.%09ld,\n",kbests[0]->tv_sec, kbests[0]->tv_nsec);
 		fprintf(fp, "%10s", info->name);
-		fprintf(fp,"       average:,%ld.%09ld,\n",averages[0]->tv_sec, averages[0]->tv_nsec); 
+		fprintf(fp,"       average:,%ld.%09ld,%ld.%09ld,\n",averages[0]->tv_sec, averages[0]->tv_nsec, stds[0]->tv_sec, stds[0]->tv_nsec);
 
 		fprintf(fp, "%10s", info->name);
 		fprintf(fp,"    Child kbest:,%ld.%09ld,\n",kbests[1]->tv_sec, kbests[1]->tv_nsec); 
 		fprintf(fp, "%10s", info->name);
-		fprintf(fp," Child average:,%ld.%09ld,\n",averages[1]->tv_sec, averages[1]->tv_nsec); 
+		fprintf(fp," Child average:,%ld.%09ld,%ld.%09ld,\n",averages[1]->tv_sec, averages[1]->tv_nsec, stds[1]->tv_sec, stds[1]->tv_nsec);
 	}
 	free(timeArrayChild);
 	free(timeArrayParent);
 	free(averages);
+	free(stds);
 	free(kbests);
 	free(sumParent);
 	free(sumChild);
 	free(averageParent);
 	free(averageChild);
+	free(stdParent);
+	free(stdChild);
 
 	clock_gettime(CLOCK_MONOTONIC,&testEnd);
 	struct timespec *diffTime = calc_diff(&testStart, &testEnd);
@@ -919,6 +960,7 @@ void send_test(struct timespec *timeArray, int iter, int *i) {
 		int fd_server = socket(AF_UNIX, SOCK_STREAM, 0);
 		if (fd_server < 0) printf("[error] failed to open server socket.\n");
 	
+		unlink(server_addr.sun_path);
 		retval = bind(fd_server, (struct sockaddr *) &server_addr, sizeof(struct sockaddr_un));
 		if (retval == -1) printf("[error] failed to bind.\n");
 		retval = listen(fd_server, 10); 
@@ -933,7 +975,7 @@ void send_test(struct timespec *timeArray, int iter, int *i) {
 
 		read(fds2[0], &r, 1);
 
-		remove(sock);
+		//remove(server_addr.sun_path);
 		close(fd_server);
 		close(fd_connect);
 		close(fds1[1]);
@@ -1018,6 +1060,7 @@ void recv_test(struct timespec *timeArray, int iter, int *i) {
 		int fd_server = socket(AF_UNIX, SOCK_STREAM, 0);
 		if (fd_server < 0) printf("[error] failed to open server socket.\n");
 	
+		unlink(server_addr.sun_path);
 		retval = bind(fd_server, (struct sockaddr *) &server_addr, sizeof(struct sockaddr_un));
 		if (retval == -1) printf("[error] failed to bind.\n");
 		retval = listen(fd_server, 10);
@@ -1052,7 +1095,7 @@ void recv_test(struct timespec *timeArray, int iter, int *i) {
 
 		write(fds1[1], &w, 1);
 
-		remove(sock);
+		//remove(server_addr.sun_path);
 		close(fd_server);
 		close(fd_connect);
 		close(fds1[1]);
@@ -1168,15 +1211,12 @@ int main(int argc, char *argv[])
 	info.name = "getpid";
 	one_line_test(fp, copy, getpid_test, &info);
 
-
-	
 	/*****************************************/
 	/*            CONTEXT SWITCH             */
 	/*****************************************/
 	info.iter = BASE_ITER * 10;
 	info.name = "context siwtch";
 	one_line_test(fp, copy, context_switch_test, &info);
-
 
 	/*****************************************/
 	/*             SEND & RECV               */
@@ -1213,11 +1253,10 @@ int main(int argc, char *argv[])
 	info.iter = BASE_ITER * 2;
 	info.name = "fork";
 	two_line_test(fp, copy, forkTest, &info);
-	
+
 	info.iter = BASE_ITER * 5;
 	info.name = "thr create";
 	two_line_test(fp, copy, threadTest, &info);
-
 
 	int page_count = 6000;
 	void *pages[page_count];

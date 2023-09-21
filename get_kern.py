@@ -12,7 +12,7 @@ with open('raw_kern', 'r') as fp:
             #print full_name
             num_name = full_name.strip('-generic')
             if '-' in num_name:
-		version_seg = num_name.split('-')
+                version_seg = num_name.split('-')
             elif 'c' in num_name:
             	version_seg = num_name.split('c')
             elif 'd' in num_name:
@@ -21,7 +21,7 @@ with open('raw_kern', 'r') as fp:
             first_versions = version_seg[0].split('.')
             #second_version = version_seg[1]
             ident = []
-	    print version_seg
+            print(version_seg)
             for s in first_versions:
                 ident.append(int(s))
             length = len(ident)
@@ -33,7 +33,7 @@ versions = sorted(versions, key = lambda x : (x[0], x[1], x[2]))
 
 with open('kern_list', 'w') as fp:
     for v in versions:
-        print v
+        print(v)
         fp.write(v[3]+'\n')
 
 os.remove('raw_kern')
