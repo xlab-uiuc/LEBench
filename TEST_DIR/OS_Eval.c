@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <math.h>
+#include <errno.h>
 
 int counter=3;
 bool  isFirstIteration = false;
@@ -868,7 +869,7 @@ void context_switch_test(struct timespec *diffTime) {
 		retval = sched_setaffinity(getpid(), sizeof(set), &set);
 		if (retval == -1) printf("[error] failed to set processor affinity.\n");
 		retval = setpriority(PRIO_PROCESS, 0, -20); 
-		if (retval == -1) printf("[error] failed to set process priority.\n");
+		if (retval == -1) printf("[error] failed to set process priority. %s\n", strerror(errno));
 
 		read(fds2[0], &r, 1); 		
 
@@ -898,7 +899,7 @@ void context_switch_test(struct timespec *diffTime) {
 		retval = sched_setaffinity(getpid(), sizeof(set), &set);
 		if (retval == -1) printf("[error] failed to set processor affinity.\n");
 		retval = setpriority(PRIO_PROCESS, 0, -20); 
-		if (retval == -1) printf("[error] failed to set process priority.\n");
+		if (retval == -1) printf("[error] failed to set process priority. %s\n", strerror(errno));
 
 		write(fds2[1], &w, 1);		
 		for (int i = 0; i < iter; i++) {
