@@ -1433,14 +1433,14 @@ int main(int argc, char *argv[])
 		fclose(copy);
 		remove(output_fn);
 	}
-	char name[300];
-	strcpy(name, home);
-	strcat(name, OUTPUT_FILE_PATH);
-	strcat(name, "output.");
-	strcat(name, str_os_name);
-	strcat(name, ".csv");
-	strcat(name, "\0");
-	int ret = rename(new_output_fn,name);
+	// char name[300];
+	// strcpy(name, home);
+	// strcat(name, OUTPUT_FILE_PATH);
+	// strcat(name, "output.");
+	// strcat(name, str_os_name);
+	// strcat(name, ".csv");
+	// strcat(name, "\0");
+	// int ret = rename(new_output_fn,name);
 	clock_gettime(CLOCK_MONOTONIC, &endTime);
 	struct timespec *diffTime = calc_diff(&startTime, &endTime);
 	printf("Test took: %ld.%09ld seconds\n",diffTime->tv_sec, diffTime->tv_nsec); 
