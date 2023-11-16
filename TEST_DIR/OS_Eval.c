@@ -198,6 +198,7 @@ int comp(const void *ele1, const void *ele2)
 typedef struct testInfo {
 	int iter;
 	const char *name;
+	int run;
 } testInfo;
 
 #define INPRECISION 0.05
@@ -250,7 +251,11 @@ struct timespec *calc_k_closest(struct timespec *timeArray, int size)
 
 }
 
+
 void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *info){
+	if (!info->run)
+		return;
+
 	struct timespec testStart, testEnd;
 	clock_gettime(CLOCK_MONOTONIC,&testStart);
 
@@ -319,6 +324,8 @@ void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *
 
 
 void one_line_test_v2(FILE *fp, FILE *copy, void (*f)(struct timespec*, int, int *), testInfo *info){
+	if (!info->run)
+		return;
 	struct timespec testStart, testEnd;
 	clock_gettime(CLOCK_MONOTONIC,&testStart);
 
@@ -388,7 +395,11 @@ void one_line_test_v2(FILE *fp, FILE *copy, void (*f)(struct timespec*, int, int
 	return;
 }
 
+
 void two_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*,struct timespec*), testInfo *info){
+	if (!info->run)
+		return;
+
 	struct timespec testStart, testEnd;
 	clock_gettime(CLOCK_MONOTONIC,&testStart);
 	printf("Performing test %s.\n", info->name);
@@ -1145,6 +1156,34 @@ void recv_test(struct timespec *timeArray, int iter, int *i) {
 
 }
 
+/* default number argc when running all benchmarks */
+/* OS_Eval 0 5.15.0 */
+#define ALL_TEST_ARGC 3
+
+/* OS_Eval 0 5.15.0 small_munmap */
+#define SINGLE_TEST_ARGC 4
+
+/* OS_Eval 0 5.15.0 small_munmap perf_fd */
+#define SINGLE_TEST_PERF_ARGC 5
+
+
+static int shall_test_run(int argc, testInfo * info, char * test_name) {
+	if (argc == ALL_TEST_ARGC) {
+		return 1;
+	}
+
+	if (argc == SINGLE_TEST_ARGC){
+		return test_name != NULL && strcmp(test_name, info->name) == 0;
+	}
+
+	if(argc == SINGLE_TEST_PERF_ARGC) {
+		return test_name != NULL && strcmp(test_name, info->name) == 0;
+	}
+	
+	return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
 	home = getenv("LEBENCH_DIR");
@@ -1159,7 +1198,11 @@ int main(int argc, char *argv[])
 
 	struct timespec startTime, endTime;
 	clock_gettime(CLOCK_MONOTONIC, &startTime);
-	if (argc != 3){printf("Invalid arguments, gave %d not 3",argc);return(0);}
+
+	if (argc != ALL_TEST_ARGC && argc != SINGLE_TEST_ARGC  && argc != SINGLE_TEST_PERF_ARGC) {
+		printf("Invalid arguments, gave %d not 3 or 4", argc);
+		return (0);
+	}
 	char *iteration = argv[1];
 	char *str_os_name = argv[2];
 	FILE *fp;
@@ -1194,29 +1237,49 @@ int main(int argc, char *argv[])
 	
 	testInfo info;	
 
-	/*****************************************/
+	if (argc == ALL_TEST_ARGC) {
+		info.run = 1;
+	}
+
+    char * test_name = NULL;
+	if (argc == SINGLE_TEST_ARGC){
+        test_name = argv[SINGLE_TEST_ARGC - 1];
+		info.run = 0;
+	}
+
+	int perf_ctl_fd = -1;
+	if(argc == SINGLE_TEST_PERF_ARGC) {
+		test_name = argv[SINGLE_TEST_PERF_ARGC - 2];
+		perf_ctl_fd = atoi(argv[SINGLE_TEST_PERF_ARGC - 1]);
+	}
+	
+	// sleep(60);
+
+    /*****************************************/
 	/*               GETPID                  */
 	/*****************************************/
-
-	sleep(60);
 	info.iter = BASE_ITER * 100;
 	info.name = "ref";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, ref_test, &info);
 
 	info.iter = 100;
 	info.name = "cpu";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, cpu_test, &info);
 
 
 	info.iter = BASE_ITER * 100;
 	info.name = "getpid";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, getpid_test, &info);
 
 	/*****************************************/
 	/*            CONTEXT SWITCH             */
 	/*****************************************/
 	info.iter = BASE_ITER * 10;
-	info.name = "context siwtch";
+	info.name = "context_siwtch";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, context_switch_test, &info);
 
 	/*****************************************/
@@ -1224,27 +1287,32 @@ int main(int argc, char *argv[])
 	/*****************************************/
 	msg_size = 1;	
 	curr_iter_limit = 50;
-	printf("msg size: %d.\n", msg_size);
-	printf("curr iter limit: %d.\n", curr_iter_limit);
+	// printf("msg size: %d.\n", msg_size);
+	// printf("curr iter limit: %d.\n", curr_iter_limit);
 	info.iter = BASE_ITER * 10;
 	info.name = "send";
+
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test_v2(fp, copy, send_test, &info);
 	
 	info.iter = BASE_ITER * 10;
 	info.name = "recv";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test_v2(fp, copy, recv_test, &info);
 	
 
 	msg_size = 96000;	// This size 96000 would cause blocking on older kernels!
 	curr_iter_limit = 1;
-	printf("msg size: %d.\n", msg_size);
-	printf("curr iter limit: %d.\n", curr_iter_limit);
+	// printf("msg size: %d.\n", msg_size);
+	// printf("curr iter limit: %d.\n", curr_iter_limit);
 	info.iter = BASE_ITER;
-	info.name = "big send";
+	info.name = "big_send";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test_v2(fp, copy, send_test, &info);
 		
 	info.iter = BASE_ITER;
-	info.name = "big recv";
+	info.name = "big_recv";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test_v2(fp, copy, recv_test, &info);
 	
 
@@ -1253,10 +1321,12 @@ int main(int argc, char *argv[])
 	/*****************************************/
 	info.iter = BASE_ITER * 2;
 	info.name = "fork";
+	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
 
 	info.iter = BASE_ITER * 5;
-	info.name = "thr create";
+	info.name = "thr_create";
+	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, threadTest, &info);
 
 	int page_count = 6000;
@@ -1266,7 +1336,8 @@ int main(int argc, char *argv[])
 	}
 	
 	info.iter = BASE_ITER / 2;	
-	info.name = "big fork";
+	info.name = "big_fork";
+	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
 
 	for (int i = 0; i < page_count; i++) {
@@ -1274,14 +1345,15 @@ int main(int argc, char *argv[])
 	}
 
 	page_count = 12000;
-	printf("Page count: %d.\n", page_count);
+	// printf("Page count: %d.\n", page_count);
 	void *pages1[page_count];
 	for (int i = 0; i < page_count; i++) {
     		pages1[i] = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	}
 	
 	info.iter = BASE_ITER / 2;	
-	info.name = "huge fork";
+	info.name = "huge_fork";
+	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
 
 	for (int i = 0; i < page_count; i++) {
@@ -1295,101 +1367,121 @@ int main(int argc, char *argv[])
 
 	/****** SMALL ******/
 	file_size = PAGE_SIZE;	
-	printf("file size: %d.\n", file_size);
+	// printf("file size: %d.\n", file_size);
 
 	info.iter = BASE_ITER * 10;
-	info.name = "small write";
+	info.name = "small_write";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
       
 	info.iter = BASE_ITER * 10; 
-	info.name = "small read";
+	info.name = "small_read";
 	read_warmup();
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "small mmap";
+	info.name = "small_mmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "small munmap";
+	info.name = "small_munmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
 	info.iter = BASE_ITER * 5;
-	info.name = "small page fault";
+	info.name = "small_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
 
 	/****** MID ******/
 	file_size = PAGE_SIZE * 10;
-	printf("file size: %d.\n", file_size);
+	// printf("file size: %d.\n", file_size);
 
 	info.iter = BASE_ITER * 10;
-	info.name = "mid write";
+	info.name = "mid_write";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "mid read";
+	info.name = "mid_read";
 	read_warmup();
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 
 	info.iter = BASE_ITER * 10;
-	info.name = "mid mmap";
+	info.name = "mid_mmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "mid munmap";
+	info.name = "mid_munmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
 	info.iter = BASE_ITER * 5;
-	info.name = "mid page fault";
+	info.name = "mid_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
 
 	/****** BIG ******/
 	file_size = PAGE_SIZE * 1000;	
-	printf("file size: %d.\n", file_size);
+	// printf("file_size: %d.\n", file_size);
 
 	info.iter = BASE_ITER / 2;
-	info.name = "big write";
+	info.name = "big_write";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 	
 	info.iter = BASE_ITER;
-	info.name = "big read";
+	info.name = "big_read";
 	read_warmup();
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "big mmap";
+	info.name = "big_mmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
 	info.iter = BASE_ITER / 4;
-	info.name = "big munmap";
+	info.name = "big_munmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 	
 	info.iter = BASE_ITER * 5;
-	info.name = "big page fault";
+	info.name = "big_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
 
        /****** HUGE ******/
 	file_size = PAGE_SIZE * 10000;	
-	printf("file size: %d.\n", file_size);
+	// printf("file size: %d.\n", file_size);
 
 	info.iter = BASE_ITER / 4;
-	info.name = "huge write";
+	info.name = "huge_write";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 
 	info.iter = BASE_ITER;
-	info.name = "huge read";
+	info.name = "huge_read";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "huge mmap";
+	info.name = "huge_mmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
 	info.iter = BASE_ITER / 4; 
-	info.name = "huge munmap";
+	info.name = "huge_munmap";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
 	info.iter = BASE_ITER * 5;
-	info.name = "huge page fault";
+	info.name = "huge_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
 
 	/*****************************************/
@@ -1401,14 +1493,17 @@ int main(int argc, char *argv[])
 
 	info.iter = BASE_ITER * 10;
 	info.name = "select";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, select_test, &info);
 	
 	info.iter = BASE_ITER * 10;
 	info.name = "poll";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, poll_test, &info);
 		
 	info.iter = BASE_ITER * 10;
 	info.name = "epoll";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, epoll_test, &info);
 	
 
@@ -1416,15 +1511,18 @@ int main(int argc, char *argv[])
 	fd_count = 1000;
 
 	info.iter = BASE_ITER;
-	info.name = "select big";
+	info.name = "select_big";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, select_test, &info);
 
 	info.iter = BASE_ITER;
-	info.name = "poll big";
+	info.name = "poll_big";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, poll_test, &info);
 
 	info.iter = BASE_ITER;
-	info.name = "epoll big";
+	info.name = "epoll_big";
+	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, epoll_test, &info);
 
 	fclose(fp);
@@ -1433,14 +1531,7 @@ int main(int argc, char *argv[])
 		fclose(copy);
 		remove(output_fn);
 	}
-	// char name[300];
-	// strcpy(name, home);
-	// strcat(name, OUTPUT_FILE_PATH);
-	// strcat(name, "output.");
-	// strcat(name, str_os_name);
-	// strcat(name, ".csv");
-	// strcat(name, "\0");
-	// int ret = rename(new_output_fn,name);
+
 	clock_gettime(CLOCK_MONOTONIC, &endTime);
 	struct timespec *diffTime = calc_diff(&startTime, &endTime);
 	printf("Test took: %ld.%09ld seconds\n",diffTime->tv_sec, diffTime->tv_nsec); 
