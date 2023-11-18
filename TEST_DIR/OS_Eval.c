@@ -199,6 +199,7 @@ typedef struct testInfo {
 	int iter;
 	const char *name;
 	int run;
+	int perf_ctl_fd;
 } testInfo;
 
 #define INPRECISION 0.05
@@ -251,6 +252,20 @@ struct timespec *calc_k_closest(struct timespec *timeArray, int size)
 
 }
 
+static void enable_perf(testInfo *info)
+{
+	if (info->perf_ctl_fd != -1) {
+		write(info->perf_ctl_fd, "enable\n", 8);
+	}
+}
+
+static void disable_perf(testInfo *info)
+{
+	if (info->perf_ctl_fd != -1) {
+		write(info->perf_ctl_fd, "disable\n", 9);
+	}
+}
+
 
 void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *info){
 	if (!info->run)
@@ -265,11 +280,15 @@ void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *
 	printf("Total test iteration %d.\n", runs);
 
 	struct timespec* timeArray = (struct timespec *)malloc(sizeof(struct timespec) * runs);
+
+	// enable_perf(info);
 	for (int i=0; i < runs; i++) {
 		timeArray[i].tv_sec = 0;
 		timeArray[i].tv_nsec = 0;
 		(*f)(&timeArray[i]);
 	}
+	// disable_perf(info);
+	
 	struct timespec *sum = calc_sum2(timeArray, runs);
 	struct timespec *average = calc_average(sum, runs);  
 	struct timespec *std = calc_std(timeArray, average, runs);
@@ -1186,8 +1205,8 @@ static int shall_test_run(int argc, testInfo * info, char * test_name) {
 
 int main(int argc, char *argv[])
 {
-	home = getenv("LEBENCH_DIR");
-	
+	// home = getenv("LEBENCH_DIR");
+	home = "/home/jz/mount2/rethinkVM_bench/LEBench/";
 	output_fn = (char *)malloc(500*sizeof(char));
 	strcpy(output_fn, home);
 	strcat(output_fn, OUTPUT_FN);
@@ -1208,6 +1227,13 @@ int main(int argc, char *argv[])
 	FILE *fp;
 	FILE *copy = NULL;
 	fp=fopen(new_output_fn,"w");
+
+	if (fp == NULL)
+	{
+		printf("Error opening file %s!\n", new_output_fn);
+		exit(1);
+	}
+
 	isFirstIteration = false;
 	if (*iteration == '0'){isFirstIteration = true;}
 	if (!isFirstIteration)
@@ -1252,7 +1278,8 @@ int main(int argc, char *argv[])
 		test_name = argv[SINGLE_TEST_PERF_ARGC - 2];
 		perf_ctl_fd = atoi(argv[SINGLE_TEST_PERF_ARGC - 1]);
 	}
-	
+	info.perf_ctl_fd = perf_ctl_fd;
+	printf("perf_ctl_fd: %d\n", perf_ctl_fd);
 	// sleep(60);
 
     /*****************************************/
@@ -1278,7 +1305,7 @@ int main(int argc, char *argv[])
 	/*            CONTEXT SWITCH             */
 	/*****************************************/
 	info.iter = BASE_ITER * 10;
-	info.name = "context_siwtch";
+	info.name = "context_switch";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, context_switch_test, &info);
 
