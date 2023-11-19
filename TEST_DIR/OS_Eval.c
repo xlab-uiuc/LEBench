@@ -281,13 +281,16 @@ void one_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*), testInfo *
 
 	struct timespec* timeArray = (struct timespec *)malloc(sizeof(struct timespec) * runs);
 
-	// enable_perf(info);
 	for (int i=0; i < runs; i++) {
 		timeArray[i].tv_sec = 0;
 		timeArray[i].tv_nsec = 0;
+	}
+
+	enable_perf(info);
+	for (int i=0; i < runs; i++) {
 		(*f)(&timeArray[i]);
 	}
-	// disable_perf(info);
+	disable_perf(info);
 	
 	struct timespec *sum = calc_sum2(timeArray, runs);
 	struct timespec *average = calc_average(sum, runs);  
@@ -360,10 +363,11 @@ void one_line_test_v2(FILE *fp, FILE *copy, void (*f)(struct timespec*, int, int
 		timeArray[i].tv_nsec = 0;
 	}
 
-
+	enable_perf(info);
 	for (int i = 0; i < runs; ) {
 		(*f)(timeArray, info->iter, &i);
 	}
+	disable_perf(info);
 
 	struct timespec *sum = calc_sum2(timeArray, runs);
 	struct timespec *average = calc_average(sum, runs);  
@@ -433,8 +437,14 @@ void two_line_test(FILE *fp, FILE *copy, void (*f)(struct timespec*,struct times
 		timeArrayParent[i].tv_nsec = 0;
 		timeArrayChild[i].tv_sec = 0;
 		timeArrayChild[i].tv_nsec = 0;
+		// (*f)(&timeArrayChild[i],&timeArrayParent[i]);
+	}
+
+	enable_perf(info);
+	for (int i=0; i < runs; i++) {
 		(*f)(&timeArrayChild[i],&timeArrayParent[i]);
 	}
+	disable_perf(info);
 
 	struct timespec *sumParent = calc_sum2(timeArrayParent, runs);
 	struct timespec *sumChild = calc_sum2(timeArrayChild, runs);
@@ -1276,7 +1286,11 @@ int main(int argc, char *argv[])
 	int perf_ctl_fd = -1;
 	if(argc == SINGLE_TEST_PERF_ARGC) {
 		test_name = argv[SINGLE_TEST_PERF_ARGC - 2];
-		perf_ctl_fd = atoi(argv[SINGLE_TEST_PERF_ARGC - 1]);
+		perf_ctl_fd = open(argv[SINGLE_TEST_PERF_ARGC - 1], O_WRONLY);
+		if (perf_ctl_fd == -1) {
+			perror("open");
+			exit(EXIT_FAILURE);
+		}
 	}
 	info.perf_ctl_fd = perf_ctl_fd;
 	printf("perf_ctl_fd: %d\n", perf_ctl_fd);
