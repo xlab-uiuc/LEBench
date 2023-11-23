@@ -27,6 +27,7 @@
 #include <sys/un.h>
 #include <math.h>
 #include <errno.h>
+#include <assert.h>
 
 int counter=3;
 bool  isFirstIteration = false;
@@ -200,6 +201,7 @@ typedef struct testInfo {
 	const char *name;
 	int run;
 	int perf_ctl_fd;
+	int perf_ack_fd;
 } testInfo;
 
 #define INPRECISION 0.05
@@ -254,15 +256,28 @@ struct timespec *calc_k_closest(struct timespec *timeArray, int size)
 
 static void enable_perf(testInfo *info)
 {
+	char ack[5];
 	if (info->perf_ctl_fd != -1) {
-		write(info->perf_ctl_fd, "enable\n", 8);
+		ssize_t bytes_written = write(info->perf_ctl_fd, "enable\n", 8);
+		assert(bytes_written == 8);
+	}
+	if (info->perf_ack_fd != -1) {
+		ssize_t bytes_read = read(info->perf_ack_fd, ack, 5);
+		assert(bytes_read == 5 && strcmp(ack, "ack\n") == 0);
 	}
 }
 
 static void disable_perf(testInfo *info)
 {
+	char ack[5];
 	if (info->perf_ctl_fd != -1) {
-		write(info->perf_ctl_fd, "disable\n", 9);
+		ssize_t bytes_written = write(info->perf_ctl_fd, "disable\n", 8);
+    	assert(bytes_written == 8);
+	}
+
+	if (info->perf_ack_fd != -1) {
+		ssize_t bytes_read = read(info->perf_ack_fd, ack, 5);
+		assert(bytes_read == 5 && strcmp(ack, "ack\n") == 0);
 	}
 }
 
@@ -1193,7 +1208,7 @@ void recv_test(struct timespec *timeArray, int iter, int *i) {
 #define SINGLE_TEST_ARGC 4
 
 /* OS_Eval 0 5.15.0 small_munmap perf_fd */
-#define SINGLE_TEST_PERF_ARGC 5
+#define SINGLE_TEST_PERF_ARGC 6
 
 
 static int shall_test_run(int argc, testInfo * info, char * test_name) {
@@ -1212,11 +1227,19 @@ static int shall_test_run(int argc, testInfo * info, char * test_name) {
 	return 0;
 }
 
+static int get_fifo_fd(const char * fifo_name, int flags) {
+  int fd = open(fifo_name, flags);
+  if (fd == -1) {
+    perror("open");
+    exit(EXIT_FAILURE);
+  }
+  return fd;
+}
 
 int main(int argc, char *argv[])
 {
 	// home = getenv("LEBENCH_DIR");
-	home = "/home/jz/mount2/rethinkVM_bench/LEBench/";
+	home = "";
 	output_fn = (char *)malloc(500*sizeof(char));
 	strcpy(output_fn, home);
 	strcat(output_fn, OUTPUT_FN);
@@ -1284,16 +1307,16 @@ int main(int argc, char *argv[])
 	}
 
 	int perf_ctl_fd = -1;
+	int perf_ack_fd = -1;	
 	if(argc == SINGLE_TEST_PERF_ARGC) {
-		test_name = argv[SINGLE_TEST_PERF_ARGC - 2];
-		perf_ctl_fd = open(argv[SINGLE_TEST_PERF_ARGC - 1], O_WRONLY);
-		if (perf_ctl_fd == -1) {
-			perror("open");
-			exit(EXIT_FAILURE);
-		}
+		test_name = argv[SINGLE_TEST_PERF_ARGC - 3];
+		perf_ctl_fd = get_fifo_fd(argv[SINGLE_TEST_PERF_ARGC - 2], O_WRONLY);
+      	perf_ack_fd = get_fifo_fd(argv[SINGLE_TEST_PERF_ARGC - 1], O_RDONLY);
 	}
 	info.perf_ctl_fd = perf_ctl_fd;
-	printf("perf_ctl_fd: %d\n", perf_ctl_fd);
+	info.perf_ack_fd = perf_ack_fd;
+	printf("perf_ctl_fd: %d\n", info.perf_ctl_fd);
+	printf("perf_ack_fd: %d\n", info.perf_ack_fd);
 	// sleep(60);
 
     /*****************************************/
