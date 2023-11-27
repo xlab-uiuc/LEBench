@@ -688,6 +688,25 @@ void mmap_test(struct timespec *diffTime) {
 	return;
 }
 
+void clear_page_cache(){
+	FILE *fp = fopen("/proc/sys/vm/drop_caches", "w");
+    if (fp == NULL) {
+        perror("Error opening file");
+    }
+
+    // Writing "3" clears pagecache, dentries and inodes.
+    // To clear only the page cache, write "1".
+    if (fprintf(fp, "1") < 0) {
+        perror("Error writing to file");
+        fclose(fp);
+    }
+
+    // printf("Page cache cleared.\n");
+
+    fclose(fp);
+}
+
+
 void page_fault_test(struct timespec *diffTime) {
 	struct timespec startTime, endTime;
 
@@ -695,17 +714,39 @@ void page_fault_test(struct timespec *diffTime) {
 	if (fd < 0) printf("invalid fd%d\n", fd);
 
 	void *addr = (void *)syscall(SYS_mmap, NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
+	volatile char * ptr = (char *)addr;
+	// clear_page_cache();
 	clock_gettime(CLOCK_MONOTONIC, &startTime);
-	char a = *((char *)addr);
+	char a = *ptr;
 	clock_gettime(CLOCK_MONOTONIC,&endTime);
 	
-	printf("read: %c\n", a);
+	// printf("read: %c\n", a);
 	syscall(SYS_munmap, addr, file_size);
         close(fd);
 	add_diff_to_sum(diffTime, endTime, startTime);
 	return;
 }
+
+void anonymous_page_fault_test(struct timespec *diffTime) {
+	struct timespec startTime, endTime;
+
+	void *addr = (void *)syscall(SYS_mmap, NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (addr == MAP_FAILED) {
+		perror("mmap");
+		exit(EXIT_FAILURE);
+	}
+	volatile char * ptr = (char *)addr;
+
+	clock_gettime(CLOCK_MONOTONIC, &startTime);
+	*ptr = 'b';
+	clock_gettime(CLOCK_MONOTONIC,&endTime);
+	
+	// printf("read: %c\n", a);
+	syscall(SYS_munmap, addr, file_size);
+	add_diff_to_sum(diffTime, endTime, startTime);
+	return;
+}
+
 
 void cpu_test(struct timespec *diffTime) {
 	struct timespec startTime, endTime;
@@ -1236,6 +1277,8 @@ static int get_fifo_fd(const char * fifo_name, int flags) {
   return fd;
 }
 
+#define SMALL_WORKLOAD_SCALING 100
+
 int main(int argc, char *argv[])
 {
 	// home = getenv("LEBENCH_DIR");
@@ -1433,12 +1476,12 @@ int main(int argc, char *argv[])
 	file_size = PAGE_SIZE;	
 	// printf("file size: %d.\n", file_size);
 
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "small_write";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
       
-	info.iter = BASE_ITER * 10; 
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING; 
 	info.name = "small_read";
 	read_warmup();
 	info.run = shall_test_run(argc, &info, test_name);
@@ -1459,16 +1502,21 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
 
-	/****** MID ******/
-	file_size = PAGE_SIZE * 10;
-	// printf("file size: %d.\n", file_size);
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
+	info.name = "small_anony_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
+	one_line_test(fp, copy, anonymous_page_fault_test, &info);
 
-	info.iter = BASE_ITER * 10;
+	// /****** MID ******/
+	file_size = PAGE_SIZE * 10;
+	// // printf("file size: %d.\n", file_size);
+
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "mid_write";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 	
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "mid_read";
 	read_warmup();
 	info.run = shall_test_run(argc, &info, test_name);
@@ -1484,7 +1532,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
-	info.iter = BASE_ITER * 5;
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
 	info.name = "mid_page_fault";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
@@ -1505,7 +1553,6 @@ int main(int argc, char *argv[])
 	one_line_test(fp, copy, read_test, &info);
 	
 	info.iter = BASE_ITER * 10;
-	info.name = "big_mmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
@@ -1514,7 +1561,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 	
-	info.iter = BASE_ITER * 5;
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
 	info.name = "big_page_fault";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
@@ -1543,10 +1590,15 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
-	info.iter = BASE_ITER * 5;
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
 	info.name = "huge_page_fault";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
+
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
+	info.name = "huge_anony_page_fault";
+	info.run = shall_test_run(argc, &info, test_name);
+	one_line_test(fp, copy, anonymous_page_fault_test, &info);
 
 	/*****************************************/
 	/*              WRITE & READ             */
