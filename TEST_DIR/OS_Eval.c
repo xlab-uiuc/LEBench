@@ -271,8 +271,8 @@ static void disable_perf(testInfo *info)
 {
 	char ack[5];
 	if (info->perf_ctl_fd != -1) {
-		ssize_t bytes_written = write(info->perf_ctl_fd, "disable\n", 8);
-    	assert(bytes_written == 8);
+		ssize_t bytes_written = write(info->perf_ctl_fd, "disable\n", 9);
+    	assert(bytes_written == 9);
 	}
 
 	if (info->perf_ack_fd != -1) {
@@ -1279,6 +1279,8 @@ static int get_fifo_fd(const char * fifo_name, int flags) {
 
 #define SMALL_WORKLOAD_SCALING 100
 
+#define BIG_WORKLOAD_SCALING 10
+
 int main(int argc, char *argv[])
 {
 	// home = getenv("LEBENCH_DIR");
@@ -1376,7 +1378,7 @@ int main(int argc, char *argv[])
 	one_line_test(fp, copy, cpu_test, &info);
 
 
-	info.iter = BASE_ITER * 100;
+	info.iter = BASE_ITER * 100 * SMALL_WORKLOAD_SCALING;
 	info.name = "getpid";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, getpid_test, &info);
@@ -1431,7 +1433,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
 
-	info.iter = BASE_ITER * 5;
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
 	info.name = "thr_create";
 	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, threadTest, &info);
@@ -1442,7 +1444,7 @@ int main(int argc, char *argv[])
     		pages[i] = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	}
 	
-	info.iter = BASE_ITER / 2;	
+	info.iter = BASE_ITER / 2 * BIG_WORKLOAD_SCALING;	
 	info.name = "big_fork";
 	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
@@ -1458,7 +1460,7 @@ int main(int argc, char *argv[])
     		pages1[i] = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	}
 	
-	info.iter = BASE_ITER / 2;	
+	info.iter = BASE_ITER / 2 * BIG_WORKLOAD_SCALING;	
 	info.name = "huge_fork";
 	info.run = shall_test_run(argc, &info, test_name);
 	two_line_test(fp, copy, forkTest, &info);
@@ -1487,7 +1489,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "small_mmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
@@ -1497,7 +1499,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 
-	info.iter = BASE_ITER * 5;
+	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
 	info.name = "small_page_fault";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
@@ -1522,12 +1524,12 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "mid_mmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "mid_munmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
@@ -1541,27 +1543,28 @@ int main(int argc, char *argv[])
 	file_size = PAGE_SIZE * 1000;	
 	// printf("file_size: %d.\n", file_size);
 
-	info.iter = BASE_ITER / 2;
+	info.iter = BASE_ITER / 2 * BIG_WORKLOAD_SCALING;
 	info.name = "big_write";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 	
-	info.iter = BASE_ITER;
+	info.iter = BASE_ITER * BIG_WORKLOAD_SCALING;
 	info.name = "big_read";
 	read_warmup();
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * BIG_WORKLOAD_SCALING;
+	info.name = "big_mmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
-	info.iter = BASE_ITER / 4;
+	info.iter = BASE_ITER / 4 * BIG_WORKLOAD_SCALING;
 	info.name = "big_munmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
 	
-	info.iter = BASE_ITER * 5 * SMALL_WORKLOAD_SCALING;
+	info.iter = BASE_ITER * 5 * BIG_WORKLOAD_SCALING;
 	info.name = "big_page_fault";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, page_fault_test, &info);
@@ -1575,17 +1578,17 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, write_test, &info);
 
-	info.iter = BASE_ITER;
+	info.iter = BASE_ITER * BIG_WORKLOAD_SCALING;
 	info.name = "huge_read";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, read_test, &info);
 	
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * BIG_WORKLOAD_SCALING;
 	info.name = "huge_mmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, mmap_test, &info);
 	
-	info.iter = BASE_ITER / 4; 
+	info.iter = BASE_ITER / 4 * BIG_WORKLOAD_SCALING ; 
 	info.name = "huge_munmap";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, munmap_test, &info);
@@ -1617,7 +1620,7 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, poll_test, &info);
 		
-	info.iter = BASE_ITER * 10;
+	info.iter = BASE_ITER * 10 * SMALL_WORKLOAD_SCALING;
 	info.name = "epoll";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, epoll_test, &info);
@@ -1631,12 +1634,12 @@ int main(int argc, char *argv[])
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, select_test, &info);
 
-	info.iter = BASE_ITER;
+	info.iter = BASE_ITER * BIG_WORKLOAD_SCALING;
 	info.name = "poll_big";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, poll_test, &info);
 
-	info.iter = BASE_ITER;
+	info.iter = BASE_ITER * BIG_WORKLOAD_SCALING;
 	info.name = "epoll_big";
 	info.run = shall_test_run(argc, &info, test_name);
 	one_line_test(fp, copy, epoll_test, &info);
